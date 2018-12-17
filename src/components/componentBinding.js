@@ -104,7 +104,7 @@
                             var keys = Object.getOwnPropertyNames(dom);
                             for(var i in keys){
                                 var k = keys[i];
-                                if(k.indexOf('__ko__')>= 0){
+                                if(k.indexOf('__ko__')>= 0 && componentViewModel && componentViewModel['koDescendantsComplete']){
                                     setTimeout(function(){
                                         componentViewModel["koDescendantsComplete"].call(componentViewModel, wrapElement);
                                     },0);
