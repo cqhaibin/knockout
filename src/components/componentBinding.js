@@ -1,5 +1,6 @@
 (function(undefined) {
     var componentLoadingOperationUniqueId = 0;
+    var cahceComponents = {};
 
     ko.bindingHandlers['component'] = {
         'init': function(element, valueAccessor, ignored1, ignored2, bindingContext) {
@@ -7,6 +8,13 @@
                 currentLoadingOperationId,
                 afterRenderSub,
                 disposeAssociatedComponentViewModel = function () {
+
+                    //cache
+                    if(cache){
+                        ShowOrHiddenCacheComponent(cahceComponents[cacheId], false);
+                        return;
+                    }
+
                     var currentViewModelDispose = currentViewModel && currentViewModel['dispose'];
                     if (typeof currentViewModelDispose === 'function') {
                         currentViewModelDispose.call(currentViewModel);
@@ -20,6 +28,12 @@
                     currentLoadingOperationId = null;
                 },
                 originalChildNodes = ko.utils.makeArray(ko.virtualElements.childNodes(element));
+            var cache = element.getAttribute('cache') || false;
+            var cacheId = null;
+            if(cache){
+                cacheId = "cacheid" + (new Date).getTime() + '' + Math.floor( Math.random() * 10000 );
+                cahceComponents[cacheId] = {};
+            }
 
             ko.virtualElements.emptyNode(element);
             ko.utils.domNodeDisposal.addDisposeCallback(element, disposeAssociatedComponentViewModel);
@@ -48,6 +62,12 @@
                         return;
                     }
 
+                    //cache
+                    if(cache && cahceComponents[cacheId][componentName]){
+                        ShowOrHiddenCacheComponent(cahceComponents[cacheId], true, componentName);
+                        return;
+                    }
+
                     // Clean up previous state
                     disposeAssociatedComponentViewModel();
 
@@ -55,7 +75,7 @@
                     if (!componentDefinition) {
                         throw new Error('Unknown component \'' + componentName + '\'');
                     }
-                    cloneTemplateIntoElement(componentName, componentDefinition, element);
+                    var wrapElement = cloneTemplateIntoElement(componentName, componentDefinition, element, cache);
 
                     var componentInfo = {
                         'element': element,
@@ -70,12 +90,30 @@
                             }
                         });
 
-                    if (componentViewModel && componentViewModel['koDescendantsComplete']) {
+                    if (!cache && componentViewModel && componentViewModel['koDescendantsComplete']) {
                         afterRenderSub = ko.bindingEvent.subscribe(element, ko.bindingEvent.descendantsComplete, componentViewModel['koDescendantsComplete'], componentViewModel);
                     }
 
                     currentViewModel = componentViewModel;
-                    ko.applyBindingsToDescendants(childBindingContext, element);
+                    if(cache){
+                        cahceComponents[cacheId][componentName] = {
+                            wrap: wrapElement,
+                            view: currentViewModel
+                        };
+                        ko.applyBindingsToDescendants(childBindingContext, wrapElement, function(dom){
+                            var keys = Object.getOwnPropertyNames(dom);
+                            for(var i in keys){
+                                var k = keys[i];
+                                if(k.indexOf('__ko__')>= 0){
+                                    setTimeout(function(){
+                                        componentViewModel["koDescendantsComplete"].call(componentViewModel, wrapElement);
+                                    },0);
+                                }
+                            }
+                        });
+                    }else{
+                        ko.applyBindingsToDescendants(childBindingContext, element);
+                    }
                 });
             }, null, { disposeWhenNodeIsRemoved: element });
 
@@ -85,14 +123,36 @@
 
     ko.virtualElements.allowedBindings['component'] = true;
 
-    function cloneTemplateIntoElement(componentName, componentDefinition, element) {
+    function ShowOrHiddenCacheComponent(allCache, checked, componentName){
+        var keys = Object.getOwnPropertyNames(allCache);
+        for(var i in keys){
+            var k = keys[i];
+            var item = allCache[k];
+            if(checked && k == componentName){
+                item.wrap.hidden = false;
+            }else{
+                item.wrap.hidden = true;
+            }
+        }
+    }
+
+    function cloneTemplateIntoElement(componentName, componentDefinition, element, isCache) {
         var template = componentDefinition['template'];
         if (!template) {
             throw new Error('Component \'' + componentName + '\' has no template');
         }
 
         var clonedNodesArray = ko.utils.cloneNodes(template);
-        ko.virtualElements.setDomNodeChildren(element, clonedNodesArray);
+        if(isCache){
+            var wrap = document.createElement('div');
+            element.appendChild(wrap);
+            ko.virtualElements.setDomNodeChildren(wrap, clonedNodesArray);
+            return wrap;
+        }else{
+            //not cache
+            ko.virtualElements.setDomNodeChildren(element, clonedNodesArray);
+            return null;
+        }
     }
 
     function createViewModel(componentDefinition, componentParams, componentInfo) {

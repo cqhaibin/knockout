@@ -294,7 +294,7 @@
             throw new Error("The binding '" + bindingName + "' cannot be used with virtual elements")
     }
 
-    function applyBindingsToDescendantsInternal(bindingContext, elementOrVirtualElement) {
+    function applyBindingsToDescendantsInternal(bindingContext, elementOrVirtualElement, callback) {
         var nextInQueue = ko.virtualElements.firstChild(elementOrVirtualElement);
 
         if (nextInQueue) {
@@ -319,6 +319,10 @@
                 // Keep a record of the next child *before* applying bindings, in case the binding removes the current child from its position
                 nextInQueue = ko.virtualElements.nextSibling(currentChild);
                 applyBindingsToNodeAndDescendantsInternal(bindingContext, currentChild);
+            }
+            if(callback){
+                //callback in cache component.
+                callback(elementOrVirtualElement.firstChild);
             }
         }
         ko.bindingEvent.notify(elementOrVirtualElement, ko.bindingEvent.childrenComplete);
@@ -541,9 +545,9 @@
         return ko.applyBindingAccessorsToNode(node, makeBindingAccessors(bindings, context, node), context);
     };
 
-    ko.applyBindingsToDescendants = function(viewModelOrBindingContext, rootNode) {
+    ko.applyBindingsToDescendants = function(viewModelOrBindingContext, rootNode, callback) {
         if (rootNode.nodeType === 1 || rootNode.nodeType === 8)
-            applyBindingsToDescendantsInternal(getBindingContext(viewModelOrBindingContext), rootNode);
+            applyBindingsToDescendantsInternal(getBindingContext(viewModelOrBindingContext), rootNode, callback);
     };
 
     ko.applyBindings = function (viewModelOrBindingContext, rootNode, extendContextCallback) {
